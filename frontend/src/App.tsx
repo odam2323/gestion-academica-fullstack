@@ -7,12 +7,21 @@ import {
 import { Alumno, Materia, Nota } from './types';
 import GradeCell from './components/GradeCell';
 import Swal from 'sweetalert2';
-import './App.css';
+import './styles/App.css';
 
 const App: React.FC = () => {
   const [alumnos, setAlumnos] = useState<Alumno[]>([]);
   const [materias, setMaterias] = useState<Materia[]>([]);
   const [notas, setNotas] = useState<Nota[]>([]);
+
+  // Actualizamos los tipos de pestañas
+  const [tabActual, setTabActual] = useState<'matriz' | 'alumnos' | 'materias' | 'detalles'>('matriz');
+
+  const [idBusquedaAlumno, setIdBusquedaAlumno] = useState('');
+  const [idBusquedaMateria, setIdBusquedaMateria] = useState('');
+
+  // Estado para la información que se mostrará en la pestaña de detalles
+  const [entidadDetalle, setEntidadDetalle] = useState<{ tipo: 'alumno' | 'materia', data: any } | null>(null);
 
   useEffect(() => {
     cargarDatos();
@@ -31,7 +40,40 @@ const App: React.FC = () => {
     }
   };
 
+  // Lógica de búsqueda: Ahora redirige a la pestaña 'detalles'
+  const handleSearchAlumno = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // IMPORTANTE: Evita que el navegador recargue
+      if (idBusquedaAlumno) {
+        const found = alumnos.find(a => a.id === parseInt(idBusquedaAlumno));
+        if (found) {
+          setEntidadDetalle({ tipo: 'alumno', data: found });
+          setTabActual('detalles');
+        } else {
+          Swal.fire('No encontrado', 'El ID del alumno no existe', 'error');
+        }
+        setIdBusquedaAlumno('');
+      }
+    }
+  };
 
+  const handleSearchMateria = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // IMPORTANTE: Evita que el navegador recargue
+      if (idBusquedaMateria) {
+        const found = materias.find(m => m.id === parseInt(idBusquedaMateria));
+        if (found) {
+          setEntidadDetalle({ tipo: 'materia', data: found });
+          setTabActual('detalles');
+        } else {
+          Swal.fire('No encontrado', 'El ID de la materia no existe', 'error');
+        }
+        setIdBusquedaMateria('');
+      }
+    }
+  };
+
+  // --- MODALES CRUD ---
   const abrirModalAlumno = async (alumno?: Alumno) => {
     const isEdit = !!alumno;
     const { value: formValues } = await Swal.fire({
@@ -39,84 +81,50 @@ const App: React.FC = () => {
       html: `
         <input id="swal-nombre" class="swal2-input" placeholder="Nombre" value="${alumno?.nombre || ''}">
         <input id="swal-apellido" class="swal2-input" placeholder="Apellido" value="${alumno?.apellido || ''}">
+        <input id="swal-email" class="swal2-input" placeholder="Email" value="${alumno?.email || ''}">
+        <input id="swal-fecha" class="swal2-input" type="date" value="${alumno?.fechaNacimiento || ''}">
       `,
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonText: 'Guardar',
-      cancelButtonText: 'Cancelar',
       preConfirm: () => {
-        const nombre = (document.getElementById('swal-nombre') as HTMLInputElement).value;
-        const apellido = (document.getElementById('swal-apellido') as HTMLInputElement).value;
-        if (!nombre || !apellido) {
-          Swal.showValidationMessage('Ambos campos son obligatorios');
+        return {
+          nombre: (document.getElementById('swal-nombre') as HTMLInputElement).value,
+          apellido: (document.getElementById('swal-apellido') as HTMLInputElement).value,
+          email: (document.getElementById('swal-email') as HTMLInputElement).value,
+          fechaNacimiento: (document.getElementById('swal-fecha') as HTMLInputElement).value
         }
-        return { nombre, apellido };
       }
     });
-
     if (formValues) {
       try {
-        if (isEdit) {
-          await updateAlumno(alumno!.id, { ...alumno, ...formValues });
-        } else {
-          await createAlumno({ ...formValues, email: 'temp@mail.com', fechaNacimiento: '2000-01-01' });
-        }
+        if (isEdit) await updateAlumno(alumno!.id, { ...alumno, ...formValues });
+        else await createAlumno(formValues);
         cargarDatos();
-        Swal.fire({ icon: 'success', title: 'Guardado', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
-      } catch (e) {
-        Swal.fire('Error', 'No se pudo guardar el alumno', 'error');
-      }
+      } catch (e) { Swal.fire('Error', 'No se pudo guardar', 'error'); }
     }
   };
-
 
   const abrirModalMateria = async (materia?: Materia) => {
     const isEdit = !!materia;
     const { value: formValues } = await Swal.fire({
       title: isEdit ? 'Editar Materia' : 'Nueva Materia',
       html: `
-        <input id="swal-mat-nombre" class="swal2-input" placeholder="Nombre de materia" value="${materia?.nombre || ''}">
+        <input id="swal-mat-nombre" class="swal2-input" placeholder="Nombre" value="${materia?.nombre || ''}">
+        <input id="swal-mat-codigo" class="swal2-input" placeholder="Código" value="${materia?.codigo || ''}">
+        <input id="swal-mat-creditos" class="swal2-input" type="number" placeholder="Créditos" value="${materia?.creditos || ''}">
       `,
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonText: 'Guardar',
       preConfirm: () => {
-        const nombre = (document.getElementById('swal-mat-nombre') as HTMLInputElement).value;
-        if (!nombre) Swal.showValidationMessage('El nombre es obligatorio');
-        return { nombre };
+        return {
+          nombre: (document.getElementById('swal-mat-nombre') as HTMLInputElement).value,
+          codigo: (document.getElementById('swal-mat-codigo') as HTMLInputElement).value,
+          creditos: parseInt((document.getElementById('swal-mat-creditos') as HTMLInputElement).value)
+        }
       }
     });
-
     if (formValues) {
       try {
-        if (isEdit) {
-          await updateMateria(materia!.id, { ...materia, ...formValues });
-        } else {
-          await createMateria({ ...formValues, codigo: 'MAT-' + Math.floor(Math.random()*100), creditos: 3 });
-        }
+        if (isEdit) await updateMateria(materia!.id, { ...materia, ...formValues });
+        else await createMateria(formValues);
         cargarDatos();
-        Swal.fire({ icon: 'success', title: 'Guardado', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
-      } catch (e) {
-        Swal.fire('Error', 'Error en el servidor', 'error');
-      }
-    }
-  };
-
-  const handleEliminarAlumno = async (id: number) => {
-    const res = await Swal.fire({ title: '¿Eliminar Alumno?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#e63946' });
-    if (res.isConfirmed) {
-      await deleteAlumno(id);
-      cargarDatos();
-      Swal.fire('Borrado', '', 'success');
-    }
-  };
-
-  const handleEliminarMateria = async (id: number) => {
-    const res = await Swal.fire({ title: '¿Eliminar Materia?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#e63946' });
-    if (res.isConfirmed) {
-      await deleteMateria(id);
-      cargarDatos();
-      Swal.fire('Borrada', '', 'success');
+      } catch (e) { Swal.fire('Error', 'No se pudo guardar', 'error'); }
     }
   };
 
@@ -131,63 +139,180 @@ const App: React.FC = () => {
 
   return (
       <div className="app-container">
-
         <header className="app-header">
-          <div>
-            <h1 className="app-title">Panel Académico</h1>
-            <p className="app-subtitle">Gestión de calificaciones y estudiantes</p>
+          <div className="header-left">
+            <h1 className="app-title">Gestión Académica</h1>
+            <nav className="app-nav">
+              <button className={tabActual === 'matriz' ? 'active' : ''} onClick={() => setTabActual('matriz')}>Matriz</button>
+              <button className={tabActual === 'alumnos' ? 'active' : ''} onClick={() => setTabActual('alumnos')}>Alumnos</button>
+              <button className={tabActual === 'materias' ? 'active' : ''} onClick={() => setTabActual('materias')}>Materias</button>
+              {entidadDetalle && (
+                  <button className={tabActual === 'detalles' ? 'active' : ''} onClick={() => setTabActual('detalles')}>🔎 Vista Detalle</button>
+              )}
+            </nav>
           </div>
-          <div>
-            <button className="btn-main" onClick={() => abrirModalAlumno()}>+ Estudiante</button>
-            <button className="btn-secondary" onClick={() => abrirModalMateria()}>+ Materia</button>
+
+          <div className="header-right">
+            <div className="search-group">
+              <div className="search-box">
+                <span className="search-label">ID Estudiante</span>
+                <input
+                    type="number" placeholder="Enter..."
+                    value={idBusquedaAlumno}
+                    onChange={(e) => setIdBusquedaAlumno(e.target.value)}
+                    onKeyDown={handleSearchAlumno}
+                />
+              </div>
+              <div className="search-box">
+                <span className="search-label">ID Materia</span>
+                <input
+                    type="number" placeholder="Enter..."
+                    value={idBusquedaMateria}
+                    onChange={(e) => setIdBusquedaMateria(e.target.value)}
+                    onKeyDown={handleSearchMateria}
+                />
+              </div>
+            </div>
           </div>
         </header>
 
-        <main className="matrix-wrapper">
-          <table className="matrix-table">
-            <thead>
-            <tr>
-              <th className="col-actions">Acciones</th>
-              <th>Estudiante</th>
-              {materias.map(m => (
-                  <th key={m.id}>
-                    <div className="subject-name">{m.nombre}</div>
-                    <div>
-                      <button className="icon-btn" onClick={() => abrirModalMateria(m)} title="Editar">✏️</button>
-                      <button className="icon-btn" onClick={() => handleEliminarMateria(m.id)} title="Eliminar">🗑️</button>
-                    </div>
-                  </th>
-              ))}
-            </tr>
-            </thead>
-            <tbody>
-            {alumnos.length === 0 ? (
-                <tr>
-                  <td colSpan={materias.length + 2} style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
-                    No hay registros en el sistema.
-                  </td>
-                </tr>
-            ) : (
-                alumnos.map(a => (
-                    <tr key={a.id}>
-                      <td className="cell-actions">
-                        <button className="icon-btn" onClick={() => abrirModalAlumno(a)} title="Editar">✏️</button>
-                        <button className="icon-btn" onClick={() => handleEliminarAlumno(a.id)} title="Eliminar">🗑️</button>
-                      </td>
-                      <td className="student-name">{a.nombre} {a.apellido}</td>
-                      {materias.map(m => {
-                        const nota = notas.find(n => n.alumno?.id === a.id && n.materia?.id === m.id);
-                        return (
-                            <td key={m.id} className="cell-grade">
-                              <GradeCell alumnoId={a.id} materiaId={m.id} notaExistente={nota} onSave={handleSaveNota} />
-                            </td>
-                        );
-                      })}
-                    </tr>
-                ))
-            )}
-            </tbody>
-          </table>
+        <main className="content-area">
+          {tabActual === 'matriz' && (
+              <div className="matrix-wrapper">
+                <table className="matrix-table">
+                  <thead>
+                  <tr>
+                    <th>Estudiante</th>
+                    {materias.map(m => (
+                        <th key={m.id}>
+                          <div className="subject-name">{m.nombre}</div>
+                          <div className="subject-detail">(id={m.id} codigo={m.codigo} creditos={m.creditos})</div>
+                        </th>
+                    ))}
+                  </tr>
+                  </thead>
+                  <tbody>
+                  {alumnos.map(a => (
+                      <tr key={a.id}>
+                        <td className="student-cell">
+                          <span className="student-id-label">ID: {a.id}</span>
+                          <span className="student-name-text">{a.nombre} {a.apellido}</span>
+                        </td>
+                        {materias.map(m => {
+                          const nota = notas.find(n => n.alumno?.id === a.id && n.materia?.id === m.id);
+                          return (
+                              <td key={m.id}>
+                                <GradeCell alumnoId={a.id} materiaId={m.id} notaExistente={nota} onSave={handleSaveNota} />
+                              </td>
+                          );
+                        })}
+                      </tr>
+                  ))}
+                  </tbody>
+                </table>
+              </div>
+          )}
+
+          {tabActual === 'alumnos' && (
+              <div className="view-container">
+                <div className="view-header">
+                  <h2>Listado de Estudiantes</h2>
+                  <button className="btn-main" onClick={() => abrirModalAlumno()}>+ Nuevo Alumno</button>
+                </div>
+                <table className="data-table">
+                  <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Nombre Completo</th>
+                    <th>Email</th>
+                    <th>Fecha Nacimiento</th>
+                    <th>Acciones</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  {alumnos.map(a => (
+                      <tr key={a.id}>
+                        <td>{a.id}</td>
+                        <td>{a.nombre} {a.apellido}</td>
+                        <td>{a.email}</td>
+                        <td>{a.fechaNacimiento}</td>
+                        <td>
+                          <button className="icon-btn" onClick={() => abrirModalAlumno(a)}>✏️</button>
+                          <button className="icon-btn" onClick={() => deleteAlumno(a.id).then(cargarDatos)}>🗑️</button>
+                        </td>
+                      </tr>
+                  ))}
+                  </tbody>
+                </table>
+              </div>
+          )}
+
+          {tabActual === 'materias' && (
+              <div className="view-container">
+                <div className="view-header">
+                  <h2>Listado de Materias</h2>
+                  <button className="btn-main" onClick={() => abrirModalMateria()}>+ Nueva Materia</button>
+                </div>
+                <table className="data-table">
+                  <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Créditos</th>
+                    <th>Acciones</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  {materias.map(m => (
+                      <tr key={m.id}>
+                        <td>{m.id}</td>
+                        <td>{m.codigo}</td>
+                        <td>{m.nombre}</td>
+                        <td>{m.creditos}</td>
+                        <td>
+                          <button className="icon-btn" onClick={() => abrirModalMateria(m)}>✏️</button>
+                          <button className="icon-btn" onClick={() => deleteMateria(m.id).then(cargarDatos)}>🗑️</button>
+                        </td>
+                      </tr>
+                  ))}
+                  </tbody>
+                </table>
+              </div>
+          )}
+
+          {/* --- VISTA DE DETALLE (NUEVA VENTANA) --- */}
+          {tabActual === 'detalles' && entidadDetalle && (
+              <div className="view-container detail-view">
+                <div className="detail-card">
+                  <div className="detail-header">
+                    <span className="detail-badge">{entidadDetalle.tipo.toUpperCase()}</span>
+                    <h2>Información Detallada del Registro</h2>
+                  </div>
+                  <hr />
+                  <div className="detail-content">
+                    {entidadDetalle.tipo === 'alumno' ? (
+                        <div className="info-grid">
+                          <div className="info-item"><span>ID de Registro:</span> <p>{entidadDetalle.data.id}</p></div>
+                          <div className="info-item"><span>Nombre Completo:</span> <p>{entidadDetalle.data.nombre} {entidadDetalle.data.apellido}</p></div>
+                          <div className="info-item"><span>Correo Institucional:</span> <p>{entidadDetalle.data.email}</p></div>
+                          <div className="info-item"><span>Fecha de Nacimiento:</span> <p>{entidadDetalle.data.fechaNacimiento}</p></div>
+                        </div>
+                    ) : (
+                        <div className="info-grid">
+                          <div className="info-item"><span>ID de Registro:</span> <p>{entidadDetalle.data.id}</p></div>
+                          <div className="info-item"><span>Código de Materia:</span> <p>{entidadDetalle.data.codigo}</p></div>
+                          <div className="info-item"><span>Nombre de Asignatura:</span> <p>{entidadDetalle.data.nombre}</p></div>
+                          <div className="info-item"><span>Créditos Académicos:</span> <p>{entidadDetalle.data.creditos}</p></div>
+                        </div>
+                    )}
+                  </div>
+                  <div className="detail-footer">
+                    <button className="btn-main" onClick={() => setTabActual('matriz')}>Volver a la Matriz</button>
+                  </div>
+                </div>
+              </div>
+          )}
         </main>
       </div>
   );
