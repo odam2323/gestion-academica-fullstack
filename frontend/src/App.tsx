@@ -5,29 +5,31 @@ import {
   createMateria, updateMateria, deleteMateria
 } from './services/api';
 import { Alumno, Materia, Nota } from './types';
-import GradeCell from './components/GradeCell';
+import Header from './components/Header';
+import Loading from './components/Loading'; // Nuevo componente
+import MatrizPage from './pages/MatrizPage';
+import AlumnosPage from './pages/AlumnosPage';
+import MateriasPage from './pages/MateriasPage';
+import DetallePage from './pages/DetallePage';
 import Swal from 'sweetalert2';
 import './styles/App.css';
 
 const App: React.FC = () => {
+  // --- ESTADOS ---
   const [alumnos, setAlumnos] = useState<Alumno[]>([]);
   const [materias, setMaterias] = useState<Materia[]>([]);
   const [notas, setNotas] = useState<Nota[]>([]);
-
-  // Actualizamos los tipos de pestañas
+  const [loading, setLoading] = useState<boolean>(false); // Estado de carga global
   const [tabActual, setTabActual] = useState<'matriz' | 'alumnos' | 'materias' | 'detalles'>('matriz');
-
   const [idBusquedaAlumno, setIdBusquedaAlumno] = useState('');
   const [idBusquedaMateria, setIdBusquedaMateria] = useState('');
+  const [entidadDetalle, setEntidadDetalle] = useState<{ tipo: 'alumno' | 'materia', data: Alumno | Materia } | null>(null);
 
-  // Estado para la información que se mostrará en la pestaña de detalles
-  const [entidadDetalle, setEntidadDetalle] = useState<{ tipo: 'alumno' | 'materia', data: any } | null>(null);
-
-  useEffect(() => {
-    cargarDatos();
-  }, []);
+  // --- CARGA DE DATOS ---
+  useEffect(() => { cargarDatos(); }, []);
 
   const cargarDatos = async () => {
+    setLoading(true);
     try {
       const [alumnosRes, materiasRes, notasRes] = await Promise.all([
         getAlumnos(), getMaterias(), getTodasLasNotas()
@@ -36,44 +38,43 @@ const App: React.FC = () => {
       setMaterias(materiasRes.data);
       setNotas(notasRes.data);
     } catch (error) {
-      console.error("Error cargando la matriz", error);
+      console.error("Error cargando datos", error);
+      Swal.fire('Error', 'No se pudo conectar con el servidor', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Lógica de búsqueda: Ahora redirige a la pestaña 'detalles'
+  // --- LÓGICA DE BÚSQUEDA ---
   const handleSearchAlumno = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      e.preventDefault(); // IMPORTANTE: Evita que el navegador recargue
-      if (idBusquedaAlumno) {
-        const found = alumnos.find(a => a.id === parseInt(idBusquedaAlumno));
-        if (found) {
-          setEntidadDetalle({ tipo: 'alumno', data: found });
-          setTabActual('detalles');
-        } else {
-          Swal.fire('No encontrado', 'El ID del alumno no existe', 'error');
-        }
-        setIdBusquedaAlumno('');
+      e.preventDefault();
+      const found = alumnos.find(a => a.id === parseInt(idBusquedaAlumno));
+      if (found) {
+        setEntidadDetalle({ tipo: 'alumno', data: found });
+        setTabActual('detalles');
+      } else {
+        Swal.fire('No encontrado', 'El ID del alumno no existe', 'error');
       }
+      setIdBusquedaAlumno('');
     }
   };
 
   const handleSearchMateria = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      e.preventDefault(); // IMPORTANTE: Evita que el navegador recargue
-      if (idBusquedaMateria) {
-        const found = materias.find(m => m.id === parseInt(idBusquedaMateria));
-        if (found) {
-          setEntidadDetalle({ tipo: 'materia', data: found });
-          setTabActual('detalles');
-        } else {
-          Swal.fire('No encontrado', 'El ID de la materia no existe', 'error');
-        }
-        setIdBusquedaMateria('');
+      e.preventDefault();
+      const found = materias.find(m => m.id === parseInt(idBusquedaMateria));
+      if (found) {
+        setEntidadDetalle({ tipo: 'materia', data: found });
+        setTabActual('detalles');
+      } else {
+        Swal.fire('No encontrado', 'El ID de la materia no existe', 'error');
       }
+      setIdBusquedaMateria('');
     }
   };
 
-  // --- MODALES CRUD ---
+  // --- MODALES CRUD ESTUDIANTES CON VALIDACIÓN ---
   const abrirModalAlumno = async (alumno?: Alumno) => {
     const isEdit = !!alumno;
     const { value: formValues } = await Swal.fire({
@@ -84,24 +85,56 @@ const App: React.FC = () => {
         <input id="swal-email" class="swal2-input" placeholder="Email" value="${alumno?.email || ''}">
         <input id="swal-fecha" class="swal2-input" type="date" value="${alumno?.fechaNacimiento || ''}">
       `,
+      focusConfirm: false,
       preConfirm: () => {
-        return {
-          nombre: (document.getElementById('swal-nombre') as HTMLInputElement).value,
-          apellido: (document.getElementById('swal-apellido') as HTMLInputElement).value,
-          email: (document.getElementById('swal-email') as HTMLInputElement).value,
-          fechaNacimiento: (document.getElementById('swal-fecha') as HTMLInputElement).value
+        const nombre = (document.getElementById('swal-nombre') as HTMLInputElement).value;
+        const apellido = (document.getElementById('swal-apellido') as HTMLInputElement).value;
+        const email = (document.getElementById('swal-email') as HTMLInputElement).value;
+        const fecha = (document.getElementById('swal-fecha') as HTMLInputElement).value;
+
+        if (!nombre || !apellido || !email || !fecha) {
+          Swal.showValidationMessage('Todos los campos son obligatorios');
+          return false;
         }
+        return { nombre, apellido, email, fechaNacimiento: fecha };
       }
     });
+
     if (formValues) {
+      setLoading(true);
       try {
         if (isEdit) await updateAlumno(alumno!.id, { ...alumno, ...formValues });
         else await createAlumno(formValues);
-        cargarDatos();
-      } catch (e) { Swal.fire('Error', 'No se pudo guardar', 'error'); }
+        await cargarDatos();
+      } catch (e) {
+        Swal.fire('Error', 'No se pudo guardar el registro', 'error');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
+  const handleEliminarAlumno = async (id: number) => {
+    const res = await Swal.fire({
+      title: '¿Eliminar Estudiante?',
+      text: "Se borrarán sus notas asociadas permanentemente",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: 'var(--primary)',
+      confirmButtonText: 'Sí, eliminar'
+    });
+    if (res.isConfirmed) {
+      setLoading(true);
+      try {
+        await deleteAlumno(id);
+        await cargarDatos();
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  // --- MODALES CRUD MATERIAS CON VALIDACIÓN ---
   const abrirModalMateria = async (materia?: Materia) => {
     const isEdit = !!materia;
     const { value: formValues } = await Swal.fire({
@@ -111,207 +144,118 @@ const App: React.FC = () => {
         <input id="swal-mat-codigo" class="swal2-input" placeholder="Código" value="${materia?.codigo || ''}">
         <input id="swal-mat-creditos" class="swal2-input" type="number" placeholder="Créditos" value="${materia?.creditos || ''}">
       `,
+      focusConfirm: false,
       preConfirm: () => {
-        return {
-          nombre: (document.getElementById('swal-mat-nombre') as HTMLInputElement).value,
-          codigo: (document.getElementById('swal-mat-codigo') as HTMLInputElement).value,
-          creditos: parseInt((document.getElementById('swal-mat-creditos') as HTMLInputElement).value)
+        const nombre = (document.getElementById('swal-mat-nombre') as HTMLInputElement).value;
+        const codigo = (document.getElementById('swal-mat-codigo') as HTMLInputElement).value;
+        const creditos = (document.getElementById('swal-mat-creditos') as HTMLInputElement).value;
+
+        if (!nombre || !codigo || !creditos) {
+          Swal.showValidationMessage('Por favor completa todos los campos');
+          return false;
         }
+        return { nombre, codigo, creditos: parseInt(creditos) };
       }
     });
+
     if (formValues) {
+      setLoading(true);
       try {
         if (isEdit) await updateMateria(materia!.id, { ...materia, ...formValues });
         else await createMateria(formValues);
-        cargarDatos();
-      } catch (e) { Swal.fire('Error', 'No se pudo guardar', 'error'); }
+        await cargarDatos();
+      } catch (e) {
+        Swal.fire('Error', 'No se pudo guardar la materia', 'error');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
+  const handleEliminarMateria = async (id: number) => {
+    const res = await Swal.fire({
+      title: '¿Eliminar Materia?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: 'var(--secondary)',
+      confirmButtonText: 'Sí, eliminar'
+    });
+    if (res.isConfirmed) {
+      setLoading(true);
+      try {
+        await deleteMateria(id);
+        await cargarDatos();
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  // --- GESTIÓN DE NOTAS ---
   const handleSaveNota = async (alumnoId: number, materiaId: number, valor: number, notaId?: number) => {
-    const payload = { valor, fechaRegistro: new Date().toISOString().split('T')[0], alumno: { id: alumnoId } as Alumno, materia: { id: materiaId } as Materia };
+    const payload = {
+      valor,
+      fechaRegistro: new Date().toISOString().split('T')[0],
+      alumno: { id: alumnoId } as Alumno,
+      materia: { id: materiaId } as Materia
+    };
     try {
       if (notaId) await updateNota(notaId, payload);
       else await createNota(payload);
-      cargarDatos();
-    } catch (e) { Swal.fire('Error', 'No se guardó la nota', 'error'); }
+      await cargarDatos();
+    } catch (e) {
+      Swal.fire('Error', 'No se guardó la calificación', 'error');
+    }
   };
 
+  // --- RENDERIZADO ---
   return (
       <div className="app-container">
-        <header className="app-header">
-          <div className="header-left">
-            <h1 className="app-title">Gestión Académica</h1>
-            <nav className="app-nav">
-              <button className={tabActual === 'matriz' ? 'active' : ''} onClick={() => setTabActual('matriz')}>Matriz</button>
-              <button className={tabActual === 'alumnos' ? 'active' : ''} onClick={() => setTabActual('alumnos')}>Alumnos</button>
-              <button className={tabActual === 'materias' ? 'active' : ''} onClick={() => setTabActual('materias')}>Materias</button>
-              {entidadDetalle && (
-                  <button className={tabActual === 'detalles' ? 'active' : ''} onClick={() => setTabActual('detalles')}>🔎 Vista Detalle</button>
-              )}
-            </nav>
-          </div>
+        <Header
+            tabActual={tabActual}
+            setTabActual={setTabActual}
+            idBusquedaAlumno={idBusquedaAlumno}
+            setIdBusquedaAlumno={setIdBusquedaAlumno}
+            handleSearchAlumno={handleSearchAlumno}
+            idBusquedaMateria={idBusquedaMateria}
+            setIdBusquedaMateria={setIdBusquedaMateria}
+            handleSearchMateria={handleSearchMateria}
+            tieneDetalle={!!entidadDetalle}
+        />
 
-          <div className="header-right">
-            <div className="search-group">
-              <div className="search-box">
-                <span className="search-label">ID Estudiante</span>
-                <input
-                    type="number" placeholder="Enter..."
-                    value={idBusquedaAlumno}
-                    onChange={(e) => setIdBusquedaAlumno(e.target.value)}
-                    onKeyDown={handleSearchAlumno}
-                />
-              </div>
-              <div className="search-box">
-                <span className="search-label">ID Materia</span>
-                <input
-                    type="number" placeholder="Enter..."
-                    value={idBusquedaMateria}
-                    onChange={(e) => setIdBusquedaMateria(e.target.value)}
-                    onKeyDown={handleSearchMateria}
-                />
-              </div>
-            </div>
-          </div>
-        </header>
+        <main className="content-area" style={{ position: 'relative' }}>
+          {/* Componente de carga centralizado */}
+          {loading && <Loading mensaje="Sincronizando con el servidor..." />}
 
-        <main className="content-area">
           {tabActual === 'matriz' && (
-              <div className="matrix-wrapper">
-                <table className="matrix-table">
-                  <thead>
-                  <tr>
-                    <th>Estudiante</th>
-                    {materias.map(m => (
-                        <th key={m.id}>
-                          <div className="subject-name">{m.nombre}</div>
-                          <div className="subject-detail">(id={m.id} codigo={m.codigo} creditos={m.creditos})</div>
-                        </th>
-                    ))}
-                  </tr>
-                  </thead>
-                  <tbody>
-                  {alumnos.map(a => (
-                      <tr key={a.id}>
-                        <td className="student-cell">
-                          <span className="student-id-label">ID: {a.id}</span>
-                          <span className="student-name-text">{a.nombre} {a.apellido}</span>
-                        </td>
-                        {materias.map(m => {
-                          const nota = notas.find(n => n.alumno?.id === a.id && n.materia?.id === m.id);
-                          return (
-                              <td key={m.id}>
-                                <GradeCell alumnoId={a.id} materiaId={m.id} notaExistente={nota} onSave={handleSaveNota} />
-                              </td>
-                          );
-                        })}
-                      </tr>
-                  ))}
-                  </tbody>
-                </table>
-              </div>
+              <MatrizPage
+                  alumnos={alumnos}
+                  materias={materias}
+                  notas={notas}
+                  onSaveNota={handleSaveNota}
+              />
           )}
-
           {tabActual === 'alumnos' && (
-              <div className="view-container">
-                <div className="view-header">
-                  <h2>Listado de Estudiantes</h2>
-                  <button className="btn-main" onClick={() => abrirModalAlumno()}>+ Nuevo Alumno</button>
-                </div>
-                <table className="data-table">
-                  <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Nombre Completo</th>
-                    <th>Email</th>
-                    <th>Fecha Nacimiento</th>
-                    <th>Acciones</th>
-                  </tr>
-                  </thead>
-                  <tbody>
-                  {alumnos.map(a => (
-                      <tr key={a.id}>
-                        <td>{a.id}</td>
-                        <td>{a.nombre} {a.apellido}</td>
-                        <td>{a.email}</td>
-                        <td>{a.fechaNacimiento}</td>
-                        <td>
-                          <button className="icon-btn" onClick={() => abrirModalAlumno(a)}>✏️</button>
-                          <button className="icon-btn" onClick={() => deleteAlumno(a.id).then(cargarDatos)}>🗑️</button>
-                        </td>
-                      </tr>
-                  ))}
-                  </tbody>
-                </table>
-              </div>
+              <AlumnosPage
+                  alumnos={alumnos}
+                  onEdit={abrirModalAlumno}
+                  onDelete={handleEliminarAlumno}
+                  onNuevo={() => abrirModalAlumno()}
+              />
           )}
-
           {tabActual === 'materias' && (
-              <div className="view-container">
-                <div className="view-header">
-                  <h2>Listado de Materias</h2>
-                  <button className="btn-main" onClick={() => abrirModalMateria()}>+ Nueva Materia</button>
-                </div>
-                <table className="data-table">
-                  <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Código</th>
-                    <th>Nombre</th>
-                    <th>Créditos</th>
-                    <th>Acciones</th>
-                  </tr>
-                  </thead>
-                  <tbody>
-                  {materias.map(m => (
-                      <tr key={m.id}>
-                        <td>{m.id}</td>
-                        <td>{m.codigo}</td>
-                        <td>{m.nombre}</td>
-                        <td>{m.creditos}</td>
-                        <td>
-                          <button className="icon-btn" onClick={() => abrirModalMateria(m)}>✏️</button>
-                          <button className="icon-btn" onClick={() => deleteMateria(m.id).then(cargarDatos)}>🗑️</button>
-                        </td>
-                      </tr>
-                  ))}
-                  </tbody>
-                </table>
-              </div>
+              <MateriasPage
+                  materias={materias}
+                  onEdit={abrirModalMateria}
+                  onDelete={handleEliminarMateria}
+                  onNueva={() => abrirModalMateria()}
+              />
           )}
-
-          {/* --- VISTA DE DETALLE (NUEVA VENTANA) --- */}
           {tabActual === 'detalles' && entidadDetalle && (
-              <div className="view-container detail-view">
-                <div className="detail-card">
-                  <div className="detail-header">
-                    <span className="detail-badge">{entidadDetalle.tipo.toUpperCase()}</span>
-                    <h2>Información Detallada del Registro</h2>
-                  </div>
-                  <hr />
-                  <div className="detail-content">
-                    {entidadDetalle.tipo === 'alumno' ? (
-                        <div className="info-grid">
-                          <div className="info-item"><span>ID de Registro:</span> <p>{entidadDetalle.data.id}</p></div>
-                          <div className="info-item"><span>Nombre Completo:</span> <p>{entidadDetalle.data.nombre} {entidadDetalle.data.apellido}</p></div>
-                          <div className="info-item"><span>Correo Institucional:</span> <p>{entidadDetalle.data.email}</p></div>
-                          <div className="info-item"><span>Fecha de Nacimiento:</span> <p>{entidadDetalle.data.fechaNacimiento}</p></div>
-                        </div>
-                    ) : (
-                        <div className="info-grid">
-                          <div className="info-item"><span>ID de Registro:</span> <p>{entidadDetalle.data.id}</p></div>
-                          <div className="info-item"><span>Código de Materia:</span> <p>{entidadDetalle.data.codigo}</p></div>
-                          <div className="info-item"><span>Nombre de Asignatura:</span> <p>{entidadDetalle.data.nombre}</p></div>
-                          <div className="info-item"><span>Créditos Académicos:</span> <p>{entidadDetalle.data.creditos}</p></div>
-                        </div>
-                    )}
-                  </div>
-                  <div className="detail-footer">
-                    <button className="btn-main" onClick={() => setTabActual('matriz')}>Volver a la Matriz</button>
-                  </div>
-                </div>
-              </div>
+              <DetallePage
+                  entidad={entidadDetalle}
+                  onVolver={() => setTabActual('matriz')}
+              />
           )}
         </main>
       </div>
