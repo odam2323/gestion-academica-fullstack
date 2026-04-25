@@ -1,0 +1,21 @@
+# Java / Spring
+target/
+*.class
+*.jar
+*.war
+
+# Node / React
+node_modules/
+build/
+dist/
+.eslintcache
+
+# Docker & OS
+db_data/
+.DS_Store
+.env
+
+# IDEs
+.idea/
+.vscode/
+*.iml
