@@ -3,7 +3,7 @@
 Esta es una solución robusta para la gestión de alumnos, materias y calificaciones. El proyecto ha sido diseñado bajo una arquitectura de microservicios contenerizados, asegurando que el despliegue sea idéntico en cualquier entorno (local o máquina virtual) mediante el uso de **Docker**.
 
 ## 🚀 Tecnologías Principales
-* **Backend:** Java 17 con Spring Boot 3 (API REST).
+* **Backend:** Java 17 con Spring Boot 3.5.4 (API REST).
 * **Frontend:** React + TypeScript.
 * **Base de Datos:** MySQL 8.0.
 * **Infraestructura:** Docker & Docker Compose.
